@@ -41,7 +41,7 @@
 
             <div id="ios-zone" class="hidden space-y-4 text-left">
                 <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800">
-                    iPhone वर थेट ऑफर्स आणि डिजिटल बिलाचे अपडेट्स मिळवण्यासाठी तुमचा नंबर नोंदवा.
+                    iPhone वर थेट ऑफर्स आणि डिजिटल बिलाचे अपडेट्स मिळवण्यासाठी तुमचा number नोंदवा.
                 </div>
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-600">मोबाईल नंबर</label>
@@ -83,15 +83,15 @@
         const shopId = urlParams.get('id') || "generic_shop";
         const shopName = urlParams.get('name') || "आमचे दुकान";
 
+        // दुकानाचे नाव स्क्रीनवर दाखवणे
         document.getElementById('shop-name').innerText = decodeURIComponent(shopName);
         const statusMsg = document.getElementById('status-message');
 
         // फोन ओळखणे (Android की iOS?)
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-        // **[FCM Sub-folder Path Fix]**: गिटहब पेजेससाठी सर्व्हिस वर्करचा अचूक पाथ सेट करणे
+        // **[FCM Sub-folder Path Fix]**: गिटहब पेजेससाठी सर्व्हिस वर्करचा अचूक पाथ आणि स्कोप सेट करणे
         if ('serviceWorker' in navigator) {
-            // इथे आपण '/Retail-connect-PWA/' हा स्कोप आणि फाईलचा अचूक पाथ स्पष्टपणे सांगत आहोत
             navigator.serviceWorker.register('/Retail-connect-PWA/firebase-messaging-sw.js', { scope: '/Retail-connect-PWA/' })
                 .then((registration) => {
                     console.log('Service Worker Registered with Scope:', registration.scope);
@@ -124,23 +124,32 @@
                         return;
                     }
 
+                    statusMsg.innerText = "सर्विस वर्कर तपासत आहे...";
+
+                    // २. गिटहब सब-फोल्डरमधील आधीच रेडी असलेला सर्विस वर्कर मिळवणे
+                    const readyReg = await navigator.serviceWorker.ready;
+
                     statusMsg.innerText = "टोकन जनरेट होत आहे...";
 
-                    // २. सर्विस वर्करद्वारे FCM टोकन मिळवणे
-                    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+                    // ३. [🔥 क्रिटिकल फिक्स]: मॅन्युअली सर्विस वर्कर पास करून टोकन जनरेट करणे
+                    const token = await messaging.getToken({
+                        serviceWorkerRegistration: readyReg,
+                        vapidKey: VAPID_KEY
+                    });
+
                     if (token) {
                         statusMsg.innerText = "कनेक्ट होत आहे... कृपया थांबा.";
 
-                        // ३. डेटाबेसमध्ये (Firestore) एंट्री सेव्ह करणे
+                        // ४. डेटाबेसमध्ये (Firestore) एंट्री सेव्ह करणे
                         await db.collection("feedback_ratings").add({
                             feedback_id: token.substring(0, 20),
                             target_shop_id: shopId,
                             rating_stars: 5,
-                            customer_comment: "Android VIP Member Joined - Token: " + token.substring(0, 10),
+                            customer_comment: "Android VIP Member Joined",
                             submitted_at: new Date().toISOString()
                         });
 
-                        statusMsg.innerText = "🚀 अभिनंदन! ऑफर्स सुरू झाल्या!";
+                        statusMsg.innerText = "🚀 अभिनंदन! तुम्ही क्लबमध्ये सामील झाला आहात. ऑफर्स सुरू झाल्या!";
                         alert("यशस्वी! आता तुम्हाला या दुकानाच्या ऑफर्स थेट मोबाईल स्क्रीनवर मिळतील.");
                     } else {
                         statusMsg.innerText = "टोकन मिळाले नाही. पुन्हा प्रयत्न करा.";
@@ -162,6 +171,7 @@
 
             statusMsg.innerText = "नोंदणी होत आहे...";
             try {
+                // थेट गुगल फायरस्टोअर डेटाबेसमध्ये नंबर आणि शॉप आयडी सेव्ह करणे
                 await db.collection("feedback_ratings").add({
                     feedback_id: "ios_" + phoneInput,
                     target_shop_id: shopId,
@@ -171,13 +181,4 @@
                 });
 
                 statusMsg.innerText = "✅ नोंदणी पूर्ण झाली! धन्यवाद.";
-                alert("धन्यवाद! तुमची व्ही.आय.पी क्लबमध्ये नोंदणी झाली आहे.");
-            } catch (err) {
-                console.error(err);
-                statusMsg.innerText = "डेटाबेस एरर! पुन्हा प्रयत्न करा.";
-            }
-        });
-    </script>
-</body>
-
-</html>
+                alert("धन्यवाद! तुमची व्ही.आय.पी क्लबमध्ये नोंदणी झाली आहे. तुम्हाला ऑफर्सचे अपडेट
