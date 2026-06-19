@@ -89,11 +89,12 @@
         // फोन ओळखणे (Android की iOS?)
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-        // **[महत्त्वाचे फिक्स]**: ब्राउझरमध्ये बॅकग्राउंड सर्व्हिस वर्कर रजिस्टर करणे
+        // **[FCM Sub-folder Path Fix]**: गिटहब पेजेससाठी सर्व्हिस वर्करचा अचूक पाथ सेट करणे
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./firebase-messaging-sw.js')
+            // इथे आपण '/Retail-connect-PWA/' हा स्कोप आणि फाईलचा अचूक पाथ स्पष्टपणे सांगत आहोत
+            navigator.serviceWorker.register('/Retail-connect-PWA/firebase-messaging-sw.js', { scope: '/Retail-connect-PWA/' })
                 .then((registration) => {
-                    console.log('Service Worker Registered Successfully!', registration);
+                    console.log('Service Worker Registered with Scope:', registration.scope);
                     if (!isIOS) {
                         statusMsg.innerText = "Android सिस्टीम रेडी आहे.";
                     }
