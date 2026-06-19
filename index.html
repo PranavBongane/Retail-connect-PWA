@@ -59,7 +59,7 @@
     </div>
 
     <script>
-        // --- १. तुमचे FIREBASE CONFIGURATION (मागील स्टेपमधील कोड इथे टाका) ---
+        // --- १. तुमचे FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyD_FzNXQFV-8NHWW5_TlAE3jstlgHMC3pA",
             authDomain: "retail-connect-app-93b25.firebaseapp.com",
@@ -70,8 +70,7 @@
             measurementId: "G-NNQECE45JH"
         };
 
-
-        // --- २. PWA मधील तुमचे VAPID PUBLIC KEY (आता मिळालेली की इथे टाका) ---
+        // --- २. PWA मधील तुमचे VAPID PUBLIC KEY ---
         const VAPID_KEY = "BArSFHNGETbNgWbMVJS-r1Bx0eMSmEYjLI_kNlWT9om0W1Vu-i8AC8CbSHoQPbVzdNLLOiooHxmVi6gdi8ZvWaM";
 
         // Firebase Initialize
@@ -79,26 +78,37 @@
         const messaging = firebase.apps.length ? firebase.messaging() : null;
         const db = firebase.firestore();
 
-        // URL मधून दुकानाचा ID आणि नाव काढणे (उदा. ?id=sai_kirana_a9f2&name=Sai%20Kirana)
+        // URL मधून दुकानाचा ID आणि नाव काढणे
         const urlParams = new URLSearchParams(window.location.search);
         const shopId = urlParams.get('id') || "generic_shop";
         const shopName = urlParams.get('name') || "आमचे दुकान";
 
-        // दुकानाचे नाव स्क्रीनवर दाखवणे
         document.getElementById('shop-name').innerText = decodeURIComponent(shopName);
         const statusMsg = document.getElementById('status-message');
 
         // फोन ओळखणे (Android की iOS?)
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
+        // **[महत्त्वाचे फिक्स]**: ब्राउझरमध्ये बॅकग्राउंड सर्व्हिस वर्कर रजिस्टर करणे
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./firebase-messaging-sw.js')
+                .then((registration) => {
+                    console.log('Service Worker Registered Successfully!', registration);
+                    if (!isIOS) {
+                        statusMsg.innerText = "Android सिस्टीम रेडी आहे.";
+                    }
+                })
+                .catch((err) => {
+                    console.error('Service Worker Registration Failed:', err);
+                    statusMsg.innerText = "सर्व्हिस वर्कर एरर!";
+                });
+        }
+
         if (isIOS) {
-            // iPhone असेल तर फॉर्म दाखवा
             document.getElementById('ios-zone').classList.remove('hidden');
             statusMsg.innerText = "iPhone सिस्टीम लोड झाली.";
         } else {
-            // Android असेल तर थेट डायरेक्ट पुश बटण दाखवा
             document.getElementById('android-zone').classList.remove('hidden');
-            statusMsg.innerText = "Android सिस्टीम रेडी आहे.";
         }
 
         // ---- Android: १-क्लिक पुश नोटिफिकेशन लॉजिक ----
@@ -106,28 +116,37 @@
             document.getElementById('btn-allow').addEventListener('click', async () => {
                 statusMsg.innerText = "परमिसन मागितली जात आहे...";
                 try {
+                    // १. ब्राउझरकडे नोटिफिकेशनची थेट परवानगी मागणे
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        statusMsg.innerText = "परमिसन नाकारली! कृपया ब्राउझर सेटिंग्स तपासा.";
+                        return;
+                    }
+
+                    statusMsg.innerText = "टोकन जनरेट होत आहे...";
+
+                    // २. सर्विस वर्करद्वारे FCM टोकन मिळवणे
                     const token = await messaging.getToken({ vapidKey: VAPID_KEY });
                     if (token) {
                         statusMsg.innerText = "कनेक्ट होत आहे... कृपया थांबा.";
 
-                        // गुगलच्या FCM सर्व्हरवर या टोकनला दुकानाच्या 'Topic' मध्ये सबस्क्राईब करणे
-                        // (यासाठी आपण पुढील टप्प्यात एक सोपं बॅकएंड फंक्शन किंवा थेट फेच रिक्वेस्ट वापरू)
-
-                        // डेटाबेसमध्ये (Firestore) एंट्री सेव्ह करणे
+                        // ३. डेटाबेसमध्ये (Firestore) एंट्री सेव्ह करणे
                         await db.collection("feedback_ratings").add({
                             feedback_id: token.substring(0, 20),
                             target_shop_id: shopId,
                             rating_stars: 5,
-                            customer_comment: "Android VIP Member Joined",
+                            customer_comment: "Android VIP Member Joined - Token: " + token.substring(0, 10),
                             submitted_at: new Date().toISOString()
                         });
 
-                        statusMsg.innerText = "🚀 अभिनंदन! तुम्ही क्लबमध्ये सामील झाला आहात. ऑफर्स सुरू झाल्या!";
+                        statusMsg.innerText = "🚀 अभिनंदन! ऑफर्स सुरू झाल्या!";
                         alert("यशस्वी! आता तुम्हाला या दुकानाच्या ऑफर्स थेट मोबाईल स्क्रीनवर मिळतील.");
+                    } else {
+                        statusMsg.innerText = "टोकन मिळाले नाही. पुन्हा प्रयत्न करा.";
                     }
                 } catch (err) {
-                    console.error(err);
-                    statusMsg.innerText = "परमिसन नाकारली किंवा एरर आली.";
+                    console.error("FCM Error Details:", err);
+                    statusMsg.innerText = "एरर: " + err.message;
                 }
             });
         }
@@ -142,7 +161,6 @@
 
             statusMsg.innerText = "नोंदणी होत आहे...";
             try {
-                // थेट गुगल फायरस्टोअर डेटाबेसमध्ये नंबर आणि शॉप आयडी सेव्ह करणे
                 await db.collection("feedback_ratings").add({
                     feedback_id: "ios_" + phoneInput,
                     target_shop_id: shopId,
@@ -152,7 +170,7 @@
                 });
 
                 statusMsg.innerText = "✅ नोंदणी पूर्ण झाली! धन्यवाद.";
-                alert("धन्यवाद! तुमची व्ही.आय.पी क्लबमध्ये नोंदणी झाली आहे. तुम्हाला ऑफर्सचे अपडेट्स दिले जातील.");
+                alert("धन्यवाद! तुमची व्ही.आय.पी क्लबमध्ये नोंदणी झाली आहे.");
             } catch (err) {
                 console.error(err);
                 statusMsg.innerText = "डेटाबेस एरर! पुन्हा प्रयत्न करा.";
