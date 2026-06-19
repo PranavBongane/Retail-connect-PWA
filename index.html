@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="mr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetailConnect VIP Club</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="bg-slate-50 font-sans antialiased">
+
+    <div class="min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 w-full max-w-md text-center space-y-6">
+
+            <div class="space-y-2">
+                <div
+                    class="text-emerald-600 font-bold tracking-wider text-xs uppercase bg-emerald-50 px-3 py-1 rounded-full inline-block">
+                    VIP CLUB</div>
+                <h1 id="shop-name" class="text-2xl font-black text-slate-800">दुकानाचे नाव लोड होत आहे...</h1>
+                <p class="text-sm text-slate-500">आमच्या व्ही.आय.पी क्लबमध्ये सामील व्हा आणि मिळवा कडक ऑफर्स थेट
+                    मोबाईलवर!</p>
+            </div>
+
+            <div
+                class="bg-slate-100 h-40 rounded-xl flex items-center justify-center border border-dashed border-slate-300">
+                <span class="text-3xl">🏮</span>
+            </div>
+
+            <div id="status-message" class="text-xs font-semibold text-blue-600">सिस्टीम कनेक्ट होत आहे...</div>
+
+            <div id="android-zone" class="hidden">
+                <button id="btn-allow"
+                    class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition duration-150 transform active:scale-95">
+                    🔔 १-क्लिकमध्ये ऑफर्स सुरू करा
+                </button>
+            </div>
+
+            <div id="ios-zone" class="hidden space-y-4 text-left">
+                <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800">
+                    iPhone वर थेट ऑफर्स आणि डिजिटल बिलाचे अपडेट्स मिळवण्यासाठी तुमचा नंबर नोंदवा.
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-600">मोबाईल नंबर</label>
+                    <input type="tel" id="ios-phone" placeholder="उदा. 9876543210"
+                        class="w-full p-3 border border-slate-200 rounded-xl focus:outline-emerald-500 bg-slate-50 text-slate-800 font-semibold"
+                        maxLength="10">
+                </div>
+                <button id="btn-ios-submit"
+                    class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition duration-150 transform active:scale-95">
+                    ✅ क्लबमध्ये सामील व्हा
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // --- १. तुमचे FIREBASE CONFIGURATION (मागील स्टेपमधील कोड इथे टाका) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD_FzNXQFV-8NHWW5_TlAE3jstlgHMC3pA",
+            authDomain: "retail-connect-app-93b25.firebaseapp.com",
+            projectId: "retail-connect-app-93b25",
+            storageBucket: "retail-connect-app-93b25.firebasestorage.app",
+            messagingSenderId: "466881998325",
+            appId: "1:466881998325:web:8f3c1c281c814973fa44bc",
+            measurementId: "G-NNQECE45JH"
+        };
+
+
+        // --- २. PWA मधील तुमचे VAPID PUBLIC KEY (आता मिळालेली की इथे टाका) ---
+        const VAPID_KEY = "BArSFHNGETbNgWbMVJS-r1Bx0eMSmEYjLI_kNlWT9om0W1Vu-i8AC8CbSHoQPbVzdNLLOiooHxmVi6gdi8ZvWaM";
+
+        // Firebase Initialize
+        firebase.initializeApp(firebaseConfig);
+        const messaging = firebase.apps.length ? firebase.messaging() : null;
+        const db = firebase.firestore();
+
+        // URL मधून दुकानाचा ID आणि नाव काढणे (उदा. ?id=sai_kirana_a9f2&name=Sai%20Kirana)
+        const urlParams = new URLSearchParams(window.location.search);
+        const shopId = urlParams.get('id') || "generic_shop";
+        const shopName = urlParams.get('name') || "आमचे दुकान";
+
+        // दुकानाचे नाव स्क्रीनवर दाखवणे
+        document.getElementById('shop-name').innerText = decodeURIComponent(shopName);
+        const statusMsg = document.getElementById('status-message');
+
+        // फोन ओळखणे (Android की iOS?)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (isIOS) {
+            // iPhone असेल तर फॉर्म दाखवा
+            document.getElementById('ios-zone').classList.remove('hidden');
+            statusMsg.innerText = "iPhone सिस्टीम लोड झाली.";
+        } else {
+            // Android असेल तर थेट डायरेक्ट पुश बटण दाखवा
+            document.getElementById('android-zone').classList.remove('hidden');
+            statusMsg.innerText = "Android सिस्टीम रेडी आहे.";
+        }
+
+        // ---- Android: १-क्लिक पुश नोटिफिकेशन लॉजिक ----
+        if (messaging) {
+            document.getElementById('btn-allow').addEventListener('click', async () => {
+                statusMsg.innerText = "परमिसन मागितली जात आहे...";
+                try {
+                    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+                    if (token) {
+                        statusMsg.innerText = "कनेक्ट होत आहे... कृपया थांबा.";
+
+                        // गुगलच्या FCM सर्व्हरवर या टोकनला दुकानाच्या 'Topic' मध्ये सबस्क्राईब करणे
+                        // (यासाठी आपण पुढील टप्प्यात एक सोपं बॅकएंड फंक्शन किंवा थेट फेच रिक्वेस्ट वापरू)
+
+                        // डेटाबेसमध्ये (Firestore) एंट्री सेव्ह करणे
+                        await db.collection("feedback_ratings").add({
+                            feedback_id: token.substring(0, 20),
+                            target_shop_id: shopId,
+                            rating_stars: 5,
+                            customer_comment: "Android VIP Member Joined",
+                            submitted_at: new Date().toISOString()
+                        });
+
+                        statusMsg.innerText = "🚀 अभिनंदन! तुम्ही क्लबमध्ये सामील झाला आहात. ऑफर्स सुरू झाल्या!";
+                        alert("यशस्वी! आता तुम्हाला या दुकानाच्या ऑफर्स थेट मोबाईल स्क्रीनवर मिळतील.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    statusMsg.innerText = "परमिसन नाकारली किंवा एरर आली.";
+                }
+            });
+        }
+
+        // ---- iOS (iPhone): मोबाईल नंबर सेव्ह करण्याचे लॉजिक ----
+        document.getElementById('btn-ios-submit').addEventListener('click', async () => {
+            const phoneInput = document.getElementById('ios-phone').value;
+            if (phoneInput.length !== 10 || isNaN(phoneInput)) {
+                alert("कृपया वैध १० अंकी मोबाईल नंबर टाका.");
+                return;
+            }
+
+            statusMsg.innerText = "नोंदणी होत आहे...";
+            try {
+                // थेट गुगल फायरस्टोअर डेटाबेसमध्ये नंबर आणि शॉप आयडी सेव्ह करणे
+                await db.collection("feedback_ratings").add({
+                    feedback_id: "ios_" + phoneInput,
+                    target_shop_id: shopId,
+                    rating_stars: 5,
+                    customer_comment: "iPhone VIP Member - Phone: " + phoneInput,
+                    submitted_at: new Date().toISOString()
+                });
+
+                statusMsg.innerText = "✅ नोंदणी पूर्ण झाली! धन्यवाद.";
+                alert("धन्यवाद! तुमची व्ही.आय.पी क्लबमध्ये नोंदणी झाली आहे. तुम्हाला ऑफर्सचे अपडेट्स दिले जातील.");
+            } catch (err) {
+                console.error(err);
+                statusMsg.innerText = "डेटाबेस एरर! पुन्हा प्रयत्न करा.";
+            }
+        });
+    </script>
+</body>
+
+</html>
